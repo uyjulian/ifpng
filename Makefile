@@ -1,21 +1,21 @@
 #############################################
 ##                                         ##
-##    Copyright (C) 2019-2019 Julian Uy    ##
+##    Copyright (C) 2019-2021 Julian Uy    ##
 ##  https://sites.google.com/site/awertyb  ##
 ##                                         ##
 ##   See details of license at "LICENSE"   ##
 ##                                         ##
 #############################################
 
-CC = i686-w64-mingw32-gcc
-CXX = i686-w64-mingw32-g++
-AR = i686-w64-mingw32-ar
-ASM = nasm
-WINDRES = i686-w64-mingw32-windres
+TOOL_TRIPLET_PREFIX ?= i686-w64-mingw32-
+CC := $(TOOL_TRIPLET_PREFIX)gcc
+CXX := $(TOOL_TRIPLET_PREFIX)g++
+AR := $(TOOL_TRIPLET_PREFIX)ar
+WINDRES := $(TOOL_TRIPLET_PREFIX)windres
+STRIP := $(TOOL_TRIPLET_PREFIX)strip
 GIT_TAG := $(shell git describe --abbrev=0 --tags)
 INCFLAGS += -I. -I.. -Iexternal/zlib -Iexternal/libpng
 ALLSRCFLAGS += $(INCFLAGS) -DGIT_TAG=\"$(GIT_TAG)\"
-ASMFLAGS += $(ALLSRCFLAGS) -fwin32 -DWIN32
 CFLAGS += -O3 -flto
 CFLAGS += $(ALLSRCFLAGS) -Wall -Wno-unused-value -Wno-format -DNDEBUG -DWIN32 -D_WIN32 -D_WINDOWS 
 CFLAGS += -D_USRDLL -DUNICODE -D_UNICODE 
@@ -32,10 +32,6 @@ LDLIBS +=
 	@printf '\t%s %s\n' CXX $<
 	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
-%.o: %.asm
-	@printf '\t%s %s\n' ASM $<
-	$(ASM) $(ASMFLAGS) $< -o$@ 
-
 %.o: %.rc
 	@printf '\t%s %s\n' WINDRES $<
 	$(WINDRES) $(WINDRESFLAGS) $< $@
@@ -45,22 +41,26 @@ LIBPNG_SOURCES += external/libpng/png.c external/libpng/pngerror.c external/libp
 SOURCES := extractor.c spi00in.c ifpng.rc $(LIBZ_SOURCES) $(LIBPNG_SOURCES)
 OBJECTS := $(SOURCES:.c=.o)
 OBJECTS := $(OBJECTS:.cpp=.o)
-OBJECTS := $(OBJECTS:.asm=.o)
 OBJECTS := $(OBJECTS:.rc=.o)
 
-BINARY ?= ifpng.spi
+BINARY ?= ifpng_unstripped.spi
+BINARY_STRIPPED ?= ifpng.spi
 ARCHIVE ?= ifpng.$(GIT_TAG).7z
 
-all: $(BINARY)
+all: $(BINARY_STRIPPED)
 
 archive: $(ARCHIVE)
 
 clean:
-	rm -f $(OBJECTS) $(BINARY) $(ARCHIVE)
+	rm -f $(OBJECTS) $(BINARY) $(BINARY_STRIPPED) $(ARCHIVE)
 
-$(ARCHIVE): $(BINARY) 
+$(ARCHIVE): $(BINARY_STRIPPED)
 	rm -f $(ARCHIVE)
 	7z a $@ $^
+
+$(BINARY_STRIPPED): $(BINARY)
+	@printf '\t%s %s\n' STRIP $@
+	$(STRIP) -o $@ $^
 
 $(BINARY): $(OBJECTS) 
 	@printf '\t%s %s\n' LNK $@

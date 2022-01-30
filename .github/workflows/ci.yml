@@ -44,7 +44,7 @@ jobs:
       - uses: actions/upload-artifact@master
         with:
           name: ifpng-win32
-          path: ifpng.*.7z
+          path: ifpng.7z
 
   create-release:
     needs: [build-win32]

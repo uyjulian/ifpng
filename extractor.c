@@ -51,8 +51,10 @@ int getBMPFromPNG(const uint8_t *input_data, size_t file_size,
 	png_infop end_info = png_create_info_struct(png_ptr);
 	if (!end_info)
 		return -1;
-	if (setjmp(png_jmpbuf(png_ptr)))
+	if (setjmp(png_jmpbuf(png_ptr))){
+		png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
 		return -1;
+	}
 
 	data_pointer d;
 	d.buf = input_data;
@@ -60,7 +62,7 @@ int getBMPFromPNG(const uint8_t *input_data, size_t file_size,
 	d.cur = 0;
 
 	png_set_read_fn(png_ptr, (png_voidp)&d, (png_rw_ptr)PNG_read_data);
-	png_set_sig_bytes(png_ptr, 8);
+	png_set_sig_bytes(png_ptr, 0);
 
 	png_read_info(png_ptr, info_ptr);
 	int width = png_get_image_width(png_ptr, info_ptr);
@@ -103,31 +105,29 @@ int getBMPFromPNG(const uint8_t *input_data, size_t file_size,
 
 	png_read_update_info(png_ptr, info_ptr);
 
-	png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
-	if (!row_pointers)
+	int bit_width = width * 4;
+	int bit_length = bit_width;
+
+	uint8_t* bitmap_data =
+		(uint8_t*)malloc(sizeof(uint8_t) * bit_length * height);
+	if (!bitmap_data) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
 		return -1;
+	}
+	png_bytepp row_pointers = (png_bytepp)malloc(sizeof(png_bytep) * height);
+	if (!row_pointers) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
+		return -1;
+	}
+
 	for (int y = 0; y < height; y++) {
 		row_pointers[y] =
-		    (png_byte *)malloc(png_get_rowbytes(png_ptr, info_ptr));
-		if (!row_pointers[y])
-			return -1;
+			(png_bytep)(bitmap_data + (height - y - 1) * bit_length);
 	}
 
 	png_read_image(png_ptr, row_pointers);
-
 	png_read_end(png_ptr, info_ptr);
 
-	int bit_width = width * 4;
-	int bit_length = bit_width;
-	uint8_t *bitmap_data =
-	    (uint8_t *)malloc(sizeof(uint8_t) * bit_length * height);
-	if (!bitmap_data)
-		return -1;
-	memset(bitmap_data, 0, bit_length * height);
-	for (int i = 0; i < height; i++) {
-		memcpy(bitmap_data + i * bit_length, row_pointers[i], bit_length);
-		free(row_pointers[i]);
-	}
 	free(row_pointers);
 	png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
 
@@ -191,7 +191,7 @@ int GetPictureInfoEx(size_t data_size, const char *data,
 	d.cur = 0;
 
 	png_set_read_fn(png_ptr, (png_voidp)&d, (png_rw_ptr)PNG_read_data);
-	png_set_sig_bytes(png_ptr, 8);
+	png_set_sig_bytes(png_ptr, 0);
 
 	png_read_info(png_ptr, info_ptr);
 
@@ -224,7 +224,7 @@ int GetPictureEx(size_t data_size, HANDLE *bitmap_info, HANDLE *bitmap_data,
 		if (progress_callback(1, 1, user_data))
 			return SPI_ABORT;
 
-	if (!getBMPFromPNG((const uint8_t *)data, data_size, &bitmap_file_header,
+	if (getBMPFromPNG((const uint8_t *)data, data_size, &bitmap_file_header,
 	                   &bitmap_info_header, &data_u8))
 		return SPI_MEMORY_ERROR;
 	*bitmap_info = LocalAlloc(LMEM_MOVEABLE, sizeof(BITMAPINFOHEADER));

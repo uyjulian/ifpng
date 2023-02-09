@@ -42,9 +42,8 @@ OBJECT_EXTENSION ?= .o
 endif
 OBJECT_EXTENSION ?= .$(TARGET_ARCH).o
 DEP_EXTENSION ?= .dep.make
-BUILD_DIR_EXTERNAL_NAME ?= build-$(TARGET_ARCH)
 export GIT_TAG := $(shell git describe --abbrev=0 --tags)
-INCFLAGS += -I. -I.. -Iexternal/zlib -Iexternal/libpng
+INCFLAGS += -I. -I..
 ALLSRCFLAGS += $(INCFLAGS) -DGIT_TAG=\"$(GIT_TAG)\"
 OPTFLAGS := -O3
 ifeq (x$(TARGET_ARCH),xintel32)
@@ -72,6 +71,12 @@ WINDRESFLAGS += $(ALLSRCFLAGS) --codepage=65001
 LDFLAGS += $(OPTFLAGS) -static -static-libgcc -Wl,--kill-at -fPIC
 LDFLAGS_LIB += -shared
 LDLIBS +=
+
+DEPENDENCY_SOURCE_DIRECTORY := $(abspath build-source)
+DEPENDENCY_BUILD_DIRECTORY := $(abspath build-$(TARGET_ARCH))
+DEPENDENCY_OUTPUT_DIRECTORY := $(abspath build-libraries)-$(TARGET_ARCH)
+
+INCFLAGS += -I$(DEPENDENCY_OUTPUT_DIRECTORY)/include
 
 %$(OBJECT_EXTENSION): %.c
 	@printf '\t%s %s\n' CC $<
@@ -105,18 +110,14 @@ ARCHIVE ?= $(PROJECT_BASENAME).$(TARGET_ARCH).$(GIT_TAG).7z
 endif
 ARCHIVE ?= $(PROJECT_BASENAME).$(TARGET_ARCH).7z
 
-LIBZ_SOURCES += external/zlib/adler32.c external/zlib/compress.c external/zlib/crc32.c external/zlib/deflate.c external/zlib/gzclose.c external/zlib/gzlib.c external/zlib/gzread.c external/zlib/gzwrite.c external/zlib/infback.c external/zlib/inffast.c external/zlib/inflate.c external/zlib/inftrees.c external/zlib/trees.c external/zlib/uncompr.c external/zlib/zutil.c
-LIBPNG_SOURCES += external/libpng/png.c external/libpng/pngerror.c external/libpng/pngget.c external/libpng/pngmem.c external/libpng/pngpread.c external/libpng/pngread.c external/libpng/pngrio.c external/libpng/pngrtran.c external/libpng/pngrutil.c external/libpng/pngset.c external/libpng/pngtrans.c external/libpng/pngwio.c external/libpng/pngwrite.c external/libpng/pngwtran.c external/libpng/pngwutil.c
-LIBPNG_NEON_SOURCES += external/libpng/arm/arm_init.c external/libpng/arm/filter_neon_intrinsics.c external/libpng/arm/palette_neon_intrinsics.c
-SOURCES := extractor.c spi00in.c ifpng.rc $(LIBZ_SOURCES) $(LIBPNG_SOURCES)
-ifneq (x,x$(findstring arm,$(TARGET_ARCH)))
-SOURCES += $(LIBPNG_NEON_SOURCES)
-endif
+LIBZ_LIBS += $(DEPENDENCY_OUTPUT_DIRECTORY)/lib/libz.a
+LIBPNG_LIBS += $(DEPENDENCY_OUTPUT_DIRECTORY)/lib/libpng16.a
+SOURCES := extractor.c spi00in.c ifpng.rc
 OBJECTS := $(SOURCES:.c=$(OBJECT_EXTENSION))
 OBJECTS := $(OBJECTS:.cpp=$(OBJECT_EXTENSION))
 OBJECTS := $(OBJECTS:.rc=$(OBJECT_EXTENSION))
 DEPENDENCIES := $(OBJECTS:%$(OBJECT_EXTENSION)=%$(DEP_EXTENSION))
-EXTERNAL_LIBS :=
+EXTERNAL_LIBS := $(LIBZ_LIBS) $(LIBPNG_LIBS)
 
 .PHONY:: all archive clean
 
@@ -126,6 +127,13 @@ archive: $(ARCHIVE)
 
 clean::
 	rm -f $(OBJECTS) $(OBJECTS_BIN) $(BINARY) $(BINARY_STRIPPED) $(ARCHIVE) $(DEPENDENCIES)
+	rm -rf $(DEPENDENCY_SOURCE_DIRECTORY) $(DEPENDENCY_BUILD_DIRECTORY) $(DEPENDENCY_OUTPUT_DIRECTORY)
+
+$(DEPENDENCY_SOURCE_DIRECTORY):
+	mkdir -p $@
+
+$(DEPENDENCY_OUTPUT_DIRECTORY):
+	mkdir -p $@
 
 $(ARCHIVE): $(BINARY_STRIPPED) $(EXTRA_DIST)
 	@printf '\t%s %s\n' 7Z $@
@@ -141,3 +149,60 @@ $(BINARY): $(OBJECTS) $(EXTERNAL_LIBS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LDFLAGS_LIB) -o $@ $^ $(LDLIBS)
 
 -include $(DEPENDENCIES)
+
+extractor$(OBJECT_EXTENSION): $(DEPENDENCY_OUTPUT_DIRECTORY)/lib/libpng.a
+
+DEPENDENCY_SOURCE_DIRECTORY_ZLIB := $(DEPENDENCY_SOURCE_DIRECTORY)/zlib
+DEPENDENCY_SOURCE_DIRECTORY_LIBPNG := $(DEPENDENCY_SOURCE_DIRECTORY)/libpng
+
+DEPENDENCY_SOURCE_FILE_ZLIB := $(DEPENDENCY_SOURCE_DIRECTORY)/zlib.tar.xz
+DEPENDENCY_SOURCE_FILE_LIBPNG := $(DEPENDENCY_SOURCE_DIRECTORY)/libpng.tar.xz
+
+DEPENDENCY_SOURCE_URL_ZLIB := https://downloads.sourceforge.net/project/libpng/zlib/1.2.11/zlib-1.2.11.tar.gz
+DEPENDENCY_SOURCE_URL_LIBPNG := https://downloads.sourceforge.net/project/libpng/libpng16/1.6.39/libpng-1.6.39.tar.xz
+
+$(DEPENDENCY_SOURCE_FILE_ZLIB): | $(DEPENDENCY_SOURCE_DIRECTORY)
+	curl --location --output $@ $(DEPENDENCY_SOURCE_URL_ZLIB)
+
+$(DEPENDENCY_SOURCE_FILE_LIBPNG): | $(DEPENDENCY_SOURCE_DIRECTORY)
+	curl --location --output $@ $(DEPENDENCY_SOURCE_URL_LIBPNG)
+
+$(DEPENDENCY_SOURCE_DIRECTORY_ZLIB): $(DEPENDENCY_SOURCE_FILE_ZLIB)
+	mkdir -p $@
+	tar -x -f $< -C $@ --strip-components 1
+
+$(DEPENDENCY_SOURCE_DIRECTORY_LIBPNG): $(DEPENDENCY_SOURCE_FILE_LIBPNG)
+	mkdir -p $@
+	tar -x -f $< -C $@ --strip-components 1
+
+DEPENDENCY_BUILD_DIRECTORY_ZLIB := $(DEPENDENCY_BUILD_DIRECTORY)/zlib
+DEPENDENCY_BUILD_DIRECTORY_LIBPNG := $(DEPENDENCY_BUILD_DIRECTORY)/libpng
+
+$(DEPENDENCY_OUTPUT_DIRECTORY)/lib/libz.a: | $(DEPENDENCY_SOURCE_DIRECTORY_ZLIB) $(DEPENDENCY_OUTPUT_DIRECTORY)
+	mkdir -p $(DEPENDENCY_BUILD_DIRECTORY_ZLIB) && \
+	cd $(DEPENDENCY_BUILD_DIRECTORY_ZLIB) && \
+	PKG_CONFIG_PATH=$(DEPENDENCY_OUTPUT_DIRECTORY)/lib/pkgconfig \
+	CFLAGS="-O2" \
+	CROSS_PREFIX="$(TOOL_TRIPLET_PREFIX)" \
+	$(DEPENDENCY_SOURCE_DIRECTORY_ZLIB)/configure \
+		--prefix="$(DEPENDENCY_OUTPUT_DIRECTORY)" \
+		--static \
+	&& \
+	$(MAKE) && \
+	$(MAKE) install
+
+$(DEPENDENCY_OUTPUT_DIRECTORY)/lib/libpng.a: $(DEPENDENCY_OUTPUT_DIRECTORY)/lib/libz.a | $(DEPENDENCY_SOURCE_DIRECTORY_LIBPNG) $(DEPENDENCY_OUTPUT_DIRECTORY)
+	mkdir -p $(DEPENDENCY_BUILD_DIRECTORY_LIBPNG) && \
+	cd $(DEPENDENCY_BUILD_DIRECTORY_LIBPNG) && \
+	PKG_CONFIG_PATH=$(DEPENDENCY_OUTPUT_DIRECTORY)/lib/pkgconfig \
+	CPPFLAGS="-I$(DEPENDENCY_OUTPUT_DIRECTORY)/include" \
+	LDFLAGS="-L$(DEPENDENCY_OUTPUT_DIRECTORY)/lib" \
+	$(DEPENDENCY_SOURCE_DIRECTORY_LIBPNG)/configure \
+		CFLAGS="-O2" \
+		--prefix="$(DEPENDENCY_OUTPUT_DIRECTORY)" \
+		--host=$(patsubst %-,%,$(TOOL_TRIPLET_PREFIX)) \
+		--enable-static \
+		--disable-shared \
+	&& \
+	$(MAKE) && \
+	$(MAKE) install

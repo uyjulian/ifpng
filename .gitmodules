@@ -1,8 +1,0 @@
-[submodule "external/libpng"]
-	path = external/libpng
-	url = https://github.com/glennrp/libpng.git
-	ignore = dirty
-[submodule "external/zlib"]
-	path = external/zlib
-	url = https://github.com/madler/zlib.git
-	ignore = dirty

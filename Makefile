@@ -159,7 +159,7 @@ DEPENDENCY_SOURCE_FILE_ZLIB := $(DEPENDENCY_SOURCE_DIRECTORY)/zlib.tar.xz
 DEPENDENCY_SOURCE_FILE_LIBPNG := $(DEPENDENCY_SOURCE_DIRECTORY)/libpng.tar.xz
 
 DEPENDENCY_SOURCE_URL_ZLIB := https://downloads.sourceforge.net/project/libpng/zlib/1.2.11/zlib-1.2.11.tar.gz
-DEPENDENCY_SOURCE_URL_LIBPNG := https://downloads.sourceforge.net/project/libpng/libpng16/1.6.39/libpng-1.6.39.tar.xz
+DEPENDENCY_SOURCE_URL_LIBPNG := https://downloads.sourceforge.net/project/libpng/libpng16/1.6.40/libpng-1.6.40.tar.xz
 
 $(DEPENDENCY_SOURCE_FILE_ZLIB): | $(DEPENDENCY_SOURCE_DIRECTORY)
 	curl --location --output $@ $(DEPENDENCY_SOURCE_URL_ZLIB)

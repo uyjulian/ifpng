@@ -97,7 +97,7 @@
         },
         {
           "name" : "Set up default build tools",
-          "run" : "sudo -H -u linuxbrew bash -c 'cd /home/linuxbrew && /home/linuxbrew/.linuxbrew/bin/brew install make nasm cmake meson ninja'"
+          "run" : "sudo -H -u linuxbrew bash -c 'cd /home/linuxbrew && /home/linuxbrew/.linuxbrew/bin/brew install p7zip make nasm cmake meson ninja'"
         },
         {
           "name" : "Set up mingw-w64 for GCC",

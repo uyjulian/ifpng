@@ -28,7 +28,11 @@
   },
   "jobs" : {
     "build-win32" : {
-      "runs-on" : "ubuntu-20.04",
+      "runs-on" : "ubuntu-latest",
+      "container" : {
+        "image" : "ghcr.io/homebrew/ubuntu20.04:latest",
+        "options" : "--user 0"
+      },
       "strategy" : {
         "matrix" : {
           "platform" : [
@@ -123,7 +127,11 @@
       "needs" : [
         "build-win32"
       ],
-      "runs-on" : "ubuntu-20.04",
+      "runs-on" : "ubuntu-latest",
+      "container" : {
+        "image" : "ubuntu:20.04",
+        "options" : "--user 0"
+      },
       "timeout-minutes" : 5,
       "if" : "startsWith(github.ref, 'refs/tags/v')",
       "steps" : [
